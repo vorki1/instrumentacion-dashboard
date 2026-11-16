@@ -5,7 +5,7 @@
   <title>Editor Excel Web - Instrumentación</title>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; background: #f3f4f6; padding: 2rem; margin: 0; }
-    .container { max-width: 1100px; margin: 0 auto; background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .container { max-width: 1200px; margin: 0 auto; background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem; }
     h1 { margin: 0; font-size: 1.5rem; color: #1f2937; }
     button { cursor: pointer; border: none; border-radius: 6px; padding: 0.5rem 1rem; font-weight: 500; transition: background 0.2s; }
@@ -17,11 +17,11 @@
     .btn-save:hover { background: #15803d; }
     .hidden { display: none; }
     .status { font-size: 0.9rem; color: #4b5563; margin-bottom: 1rem; }
-    .table-wrapper { overflow-x: auto; }
+    .table-wrapper { overflow-x: auto; max-height: 70vh; }
     table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
     th, td { border: 1px solid #d1d5db; padding: 0.5rem; text-align: left; }
-    th { background: #f9fafb; color: #374151; font-weight: 600; }
-    input[type="text"] { width: 100%; box-sizing: border-box; padding: 0.35rem; border: 1px solid #d1d5db; border-radius: 4px; }
+    th { background: #f9fafb; color: #374151; font-weight: 600; position: sticky; top: 0; z-index: 10; }
+    input[type="text"] { width: 100%; min-width: 120px; box-sizing: border-box; padding: 0.35rem; border: 1px solid #d1d5db; border-radius: 4px; }
   </style>
 </head>
 <body>
@@ -62,6 +62,7 @@
 
     let accessToken = "";
     let dynamicTableUrl = "";
+    let sessionHeaders = null;
 
     function generarVerifier() {
       const array = new Uint8Array(32);
@@ -140,38 +141,71 @@
     };
 
     async function localizarYcargar() {
-      const status = document.getElementById("statusMsg");
       dynamicTableUrl = GRAPH_ROOT + "/me/drive/items/" + MY_FILE_ID + "/workbook/tables/" + TABLE_NAME;
-      status.innerText = "✓ Conectado a: Planilla Estructura equipos para instrumentos CNN Rev0.xlsx (" + TABLE_NAME + ")";
       await cargarDatos();
     }
 
     async function cargarDatos() {
       if (!dynamicTableUrl) return localizarYcargar();
-      const headers = { Authorization: "Bearer " + accessToken };
-      
-      const resCols = await fetch(dynamicTableUrl + "/columns", { headers });
+      const status = document.getElementById("statusMsg");
+      status.innerText = "⏳ Abriendo libro en memoria de Excel (puede tardar 10s la primera vez)...";
+
+      const baseHeaders = { 
+        Authorization: "Bearer " + accessToken,
+        "Content-Type": "application/json"
+      };
+
+      // 1. Crear sesión persistente del libro para acelerar lecturas y ediciones
+      if (!sessionHeaders) {
+        try {
+          const workbookUrl = dynamicTableUrl.split("/tables/")[0];
+          const resSession = await fetch(workbookUrl + "/createSession", {
+            method: "POST",
+            headers: baseHeaders,
+            body: JSON.stringify({ persistChanges: true })
+          });
+          if (resSession.ok) {
+            const sessionData = await resSession.json();
+            sessionHeaders = {
+              ...baseHeaders,
+              "workbook-session-id": sessionData.id
+            };
+          } else {
+            sessionHeaders = baseHeaders;
+          }
+        } catch (e) {
+          sessionHeaders = baseHeaders;
+        }
+      }
+
+      // 2. Leer solo los nombres de las columnas
+      const resCols = await fetch(dynamicTableUrl + "/columns?$select=name", { headers: sessionHeaders });
       if (!resCols.ok) {
         const err = await resCols.json();
+        status.innerText = "❌ Tiempo agotado al leer Excel. Intenta abrir el Excel en otra pestaña y recargar.";
         return alert("Error al leer tabla: " + (err.error?.message || resCols.statusText));
       }
       const colsData = await resCols.json();
       document.getElementById("tablaHead").innerHTML = "<tr>" + colsData.value.map(c => "<th>" + c.name + "</th>").join("") + "<th>Acción</th></tr>";
 
-      const resRows = await fetch(dynamicTableUrl + "/rows", { headers });
+      // 3. Leer las primeras 100 filas para evitar sobrecarga
+      const resRows = await fetch(dynamicTableUrl + "/rows?$top=100&$select=values", { headers: sessionHeaders });
       const rowsData = await resRows.json();
       const tbody = document.getElementById("tablaBody");
       tbody.innerHTML = "";
 
       rowsData.value.forEach((row, rowIndex) => {
-        const valores = row.values;
+        const valores = row.values[0];
         let tr = "<tr>";
         valores.forEach((val, colIndex) => {
-          tr += "<td><input type='text' id='celda-" + rowIndex + "-" + colIndex + "' value='" + (val ?? "") + "'></td>";
+          const safeVal = String(val ?? "").replace(/'/g, "&#39;");
+          tr += "<td><input type='text' id='celda-" + rowIndex + "-" + colIndex + "' value='" + safeVal + "'></td>";
         });
         tr += "<td><button class='btn-save' onclick='guardarFila(" + rowIndex + ", " + valores.length + ")'>Guardar</button></td></tr>";
         tbody.innerHTML += tr;
       });
+
+      status.innerText = "✓ Conectado: Mostrando " + rowsData.value.length + " filas de " + TABLE_NAME;
     }
 
     async function guardarFila(rowIndex, numCols) {
@@ -182,7 +216,7 @@
 
       const res = await fetch(dynamicTableUrl + "/rows/itemAt(index=" + rowIndex + ")", {
         method: "PATCH",
-        headers: {
+        headers: sessionHeaders || {
           Authorization: "Bearer " + accessToken,
           "Content-Type": "application/json"
         },
@@ -190,7 +224,7 @@
       });
 
       if (res.ok) {
-        alert("Fila actualizada en Excel correctamente.");
+        alert("✓ Fila actualizada en Excel correctamente.");
       } else {
         const err = await res.json();
         alert("Error al guardar: " + (err.error?.message || "Verifica permisos de escritura."));
