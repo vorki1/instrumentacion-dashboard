@@ -53,10 +53,11 @@
     const EXCEL_PATH = "/me/drive/root:/base_datos.xlsx:/workbook/tables/Tabla1";
 
     // Dominios ensamblados para evitar recortes al copiar/pegar
-    const LOGIN_HOST = ["https:/", "://microsoftonline.com", TENANT_ID, "oauth2", "v2.0"].join("/");
+    const LOGIN_HOST = "https://" + "lo" + "gin." + "microsoftonline.com/" + TENANT_ID + "/oauth2/v2.0";
     const AUTH_URL = LOGIN_HOST + "/authorize";
     const TOKEN_URL = LOGIN_HOST + "/token";
-    const GRAPH_BASE = ["https:/", "://microsoft.com", "v1.0"].join("/") + EXCEL_PATH;
+    const GRAPH_BASE = "https://" + "gra" + "ph." + "://microsoft.com" + EXCEL_PATH;
+
 
     let accessToken = "";
 
