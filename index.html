@@ -51,10 +51,14 @@
     const TABLE_NAME = "TablaDatos";
     const EXCEL_PATH = "/me/drive/items/" + FILE_ID + "/workbook/tables/" + TABLE_NAME;
 
-    const LOGIN_HOST = "https://" + "lo" + "gin." + "://microsoftonline.com" + TENANT_ID + "/oauth2/v2.0";
+    // Dominios invertidos para evitar recortes o alteraciones al copiar/pegar
+    const M_ONLINE = "moc.enilnotfosorcim.nigol".split("").reverse().join("");
+    const M_GRAPH = "moc.tfosorcim.hparg".split("").reverse().join("");
+
+    const LOGIN_HOST = ["https:/", M_ONLINE, TENANT_ID, "oauth2", "v2.0"].join("/");
     const AUTH_URL = LOGIN_HOST + "/authorize";
     const TOKEN_URL = LOGIN_HOST + "/token";
-    const GRAPH_BASE = "https://" + "gra" + "ph." + "://microsoft.com" + EXCEL_PATH;
+    const GRAPH_BASE = ["https:/", M_GRAPH, "v1.0"].join("/") + EXCEL_PATH;
 
     let accessToken = "";
 
