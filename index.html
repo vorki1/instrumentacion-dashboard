@@ -47,11 +47,13 @@
     const TENANT_ID = "227a5d9b-61f3-4a95-9e6d-4f924605902e";
     const REDIRECT_URI = window.location.origin + window.location.pathname;
     
-    const SHARE_URL = "https://sharepoint.com";
+    const SP_HOST = "moc.tnioperaHs.ym-airenimpac".split("").reverse().join("");
+    const SHARE_URL = "https://" + SP_HOST + "/:x:/r/personal/gfreire_cmp_cl/_layouts/15/doc2.aspx?sourcedoc=%7B73C432CA-D48A-4EA1-B6B3-B8CA76A6B62B%7D&file=Planilla%20Estructura%20equipos%20para%20instrumentos%20CNN%20Rev0.xlsx";
     const ENCODED_URL = "u!" + btoa(SHARE_URL).replace(/=/g, "").replace(/\//g, "_").replace(/\+/g, "-");
     
     const TABLE_NAME = "TablaDatos";
     const EXCEL_PATH = "/shares/" + ENCODED_URL + "/driveItem/workbook/tables/" + TABLE_NAME;
+
 
     // Dominios invertidos para evitar recortes o alteraciones al copiar/pegar
     const M_ONLINE = "moc.enilnotfosorcim.nigol".split("").reverse().join("");
