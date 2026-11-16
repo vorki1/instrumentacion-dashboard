@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Editor Excel Web</title>
+  <script src="https://msauth.net"></script>
+  <script src="https://tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8 font-sans">
+
+  <div class="max-w-4xl mx-auto bg-white p-6 rounded shadow">
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-2xl font-bold text-gray-800">Gestor de Datos Excel</h1>
+      <button id="btnLogin" onclick="iniciarSesion()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+        Iniciar Sesión Microsoft
+      </button>
+    </div>
+
+    <div id="app" class="hidden">
+      <button onclick="cargarDatos()" class="mb-4 bg-gray-200 px-3 py-1 rounded text-sm hover:bg-gray-300">
+        ↻ Recargar Tabla
+      </button>
+      <div class="overflow-x-auto">
+        <table class="min-w-full border border-gray-300" id="tablaDatos">
+          <thead class="bg-gray-200" id="tablaHead"></thead>
+          <tbody id="tablaBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ================= CONFIGURACIÓN (REEMPLAZA ESTOS 3 DATOS) =================
+    const CLIENT_ID = "PEGA_AQUI_TU_CLIENT_ID";
+    const TENANT_ID = "PEGA_AQUI_TU_TENANT_ID";
+    const REDIRECT_URI = "https://github.io"; // Debe coincidir exacto con Entra ID
+    
+    const EXCEL_PATH = "/me/drive/root:/base_datos.xlsx:/workbook/tables/Tabla1";
+    // =========================================================================
+
+    const msalConfig = {
+      auth: {
+        clientId: CLIENT_ID,
+        authority: `https://microsoftonline.com{TENANT_ID}`,
+        redirectUri: REDIRECT_URI
+      }
+    };
+
+    const msalInstance = new msal.PublicClientApplication(msalConfig);
+    let accessToken = "";
+
+    async function iniciarSesion() {
+      try {
+        const loginResponse = await msalInstance.loginPopup({ scopes: ["User.Read", "Files.ReadWrite"] });
+        accessToken = loginResponse.accessToken;
+        document.getElementById("btnLogin").innerText = "Conectado: " + loginResponse.account.username;
+        document.getElementById("app").classList.remove("hidden");
+        cargarDatos();
+      } catch (error) {
+        alert("Error al iniciar sesión: " + error);
+      }
+    }
+
+    async function cargarDatos() {
+      const headers = { Authorization: `Bearer ${accessToken}` };
+      
+      // 1. Obtener encabezados
+      const resCols = await fetch(`https://microsoft.com{EXCEL_PATH}/columns`, { headers });
+      const colsData = await resCols.json();
+      const thead = document.getElementById("tablaHead");
+      thead.innerHTML = "<tr>" + colsData.value.map(c => `<th class="border p-2 text-left">${c.name}</th>`).join("") + "<th class='border p-2'>Acción</th></tr>";
+
+      // 2. Obtener filas
+      const resRows = await fetch(`https://microsoft.com{EXCEL_PATH}/rows`, { headers });
+      const rowsData = await resRows.json();
+      const tbody = document.getElementById("tablaBody");
+      tbody.innerHTML = "";
+
+      rowsData.value.forEach((row, rowIndex) => {
+        const valores = row.values[0];
+        let tr = `<tr class="border-b">`;
+        valores.forEach((val, colIndex) => {
+          tr += `<td class="border p-2"><input type="text" id="celda-${rowIndex}-${colIndex}" value="${val}" class="w-full border rounded px-1"></td>`;
+        });
+        tr += `<td class="border p-2"><button onclick="guardarFila(${rowIndex}, ${valores.length})" class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">Guardar</button></td></tr>`;
+        tbody.innerHTML += tr;
+      });
+    }
+
+    async function guardarFila(rowIndex, numCols) {
+      let nuevosValores = [];
+      for (let i = 0; i < numCols; i++) {
+        nuevosValores.push(document.getElementById(`celda-${rowIndex}-${i}`).value);
+      }
+
+      const res = await fetch(`https://microsoft.com{EXCEL_PATH}/rows/itemAt(index=${rowIndex})`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ values: [nuevosValores] })
+      });
+
+      if (res.ok) {
+        alert("Fila actualizada en Excel correctamente.");
+      } else {
+        alert("Error al guardar. Verifica permisos.");
+      }
+    }
+  </script>
+</body>
+</html>
