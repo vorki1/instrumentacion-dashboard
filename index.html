@@ -2,10 +2,10 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Editor Excel Web</title>
+  <title>Editor Excel Web - Instrumentación</title>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; background: #f3f4f6; padding: 2rem; margin: 0; }
-    .container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .container { max-width: 1100px; margin: 0 auto; background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem; }
     h1 { margin: 0; font-size: 1.5rem; color: #1f2937; }
     button { cursor: pointer; border: none; border-radius: 6px; padding: 0.5rem 1rem; font-weight: 500; transition: background 0.2s; }
@@ -45,19 +45,16 @@
   <script>
     const CLIENT_ID = "86f0d04f-5763-4740-a5ec-b6f6b5e36769";
     const TENANT_ID = "227a5d9b-61f3-4a95-9e6d-4f924605902e";
-    
-    // Toma automáticamente la URL exacta desde donde abres la página
     const REDIRECT_URI = window.location.origin + window.location.pathname;
     
-    // Ajusta el nombre del archivo (.xlsx) y el nombre de la Tabla si son distintos
-    const EXCEL_PATH = "/me/drive/items/73C432CA-D48A-4EA1-B6B3-B8CA76A6B62B/workbook/tables/TablaDatos";
+    const FILE_ID = "73C432CA-D48A-4EA1-B6B3-B8CA76A6B62B";
+    const TABLE_NAME = "TablaDatos";
+    const EXCEL_PATH = "/me/drive/items/" + FILE_ID + "/workbook/tables/" + TABLE_NAME;
 
-    // Dominios ensamblados para evitar recortes al copiar/pegar
-    const LOGIN_HOST = "https://" + "lo" + "gin." + "microsoftonline.com/" + TENANT_ID + "/oauth2/v2.0";
+    const LOGIN_HOST = "https://" + "lo" + "gin." + "://microsoftonline.com" + TENANT_ID + "/oauth2/v2.0";
     const AUTH_URL = LOGIN_HOST + "/authorize";
     const TOKEN_URL = LOGIN_HOST + "/token";
-    const GRAPH_BASE = "https://" + "gra" + "://microsoft.com" + EXCEL_PATH;
-
+    const GRAPH_BASE = "https://" + "gra" + "ph." + "://microsoft.com" + EXCEL_PATH;
 
     let accessToken = "";
 
