@@ -50,13 +50,13 @@
     const REDIRECT_URI = window.location.origin + window.location.pathname;
     
     // Ajusta el nombre del archivo (.xlsx) y el nombre de la Tabla si son distintos
-    const EXCEL_PATH = "/me/drive/root:/base_datos.xlsx:/workbook/tables/Tabla1";
+    const EXCEL_PATH = "/me/drive/items/73C432CA-D48A-4EA1-B6B3-B8CA76A6B62B/workbook/tables/TablaDatos";
 
     // Dominios ensamblados para evitar recortes al copiar/pegar
     const LOGIN_HOST = "https://" + "lo" + "gin." + "microsoftonline.com/" + TENANT_ID + "/oauth2/v2.0";
     const AUTH_URL = LOGIN_HOST + "/authorize";
     const TOKEN_URL = LOGIN_HOST + "/token";
-    const GRAPH_BASE = "https://" + "gra" + "ph." + "://microsoft.com" + EXCEL_PATH;
+    const GRAPH_BASE = "https://" + "gra" + "://microsoft.com" + EXCEL_PATH;
 
 
     let accessToken = "";
