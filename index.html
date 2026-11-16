@@ -33,7 +33,7 @@
     </div>
 
     <div id="app" class="hidden">
-      <div class="status" id="statusMsg">Buscando archivo en OneDrive...</div>
+      <div class="status" id="statusMsg">Conectando con Excel...</div>
       <button class="btn-secondary" onclick="cargarDatos()">↻ Recargar Tabla</button>
       <div class="table-wrapper">
         <table id="tablaDatos">
@@ -49,7 +49,7 @@
     const TENANT_ID = "227a5d9b-61f3-4a95-9e6d-4f924605902e";
     const REDIRECT_URI = window.location.origin + window.location.pathname;
     
-    const FILE_QUERY = "Planilla Estructura equipos para instrumentos CNN Rev0.xlsx";
+    const MY_FILE_ID = "21F50C94-F058-4B2F-862E-39A14569824C";
     const TABLE_NAME = "TablaDatos";
 
     const M_ONLINE = "moc.enilnotfosorcim.nigol".split("").reverse().join("");
@@ -141,17 +141,10 @@
 
     async function localizarYcargar() {
       const status = document.getElementById("statusMsg");
-      
-      // Apunta directo al OneDrive del propietario (gfreire@cmp.cl) usando el ID único del archivo
-      const OWNER_EMAIL = "gfreire@cmp.cl";
-      const FILE_ID = "73C432CA-D48A-4EA1-B6B3-B8CA76A6B62B";
-
-      dynamicTableUrl = GRAPH_ROOT + "/users/" + OWNER_EMAIL + "/drive/items/" + FILE_ID + "/workbook/tables/" + TABLE_NAME;
-      status.innerText = "✓ Conectando directo a la planilla de " + OWNER_EMAIL + "...";
-      
+      dynamicTableUrl = GRAPH_ROOT + "/me/drive/items/" + MY_FILE_ID + "/workbook/tables/" + TABLE_NAME;
+      status.innerText = "✓ Conectado a: Planilla Estructura equipos para instrumentos CNN Rev0.xlsx (" + TABLE_NAME + ")";
       await cargarDatos();
     }
-
 
     async function cargarDatos() {
       if (!dynamicTableUrl) return localizarYcargar();
@@ -171,7 +164,7 @@
       tbody.innerHTML = "";
 
       rowsData.value.forEach((row, rowIndex) => {
-        const valores = row.values[0];
+        const valores = row.values;
         let tr = "<tr>";
         valores.forEach((val, colIndex) => {
           tr += "<td><input type='text' id='celda-" + rowIndex + "-" + colIndex + "' value='" + (val ?? "") + "'></td>";
