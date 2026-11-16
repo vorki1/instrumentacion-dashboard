@@ -140,38 +140,18 @@
     };
 
     async function localizarYcargar() {
-      const headers = { Authorization: "Bearer " + accessToken };
       const status = document.getElementById("statusMsg");
+      
+      // Apunta directo al OneDrive del propietario (gfreire@cmp.cl) usando el ID único del archivo
+      const OWNER_EMAIL = "gfreire@cmp.cl";
+      const FILE_ID = "73C432CA-D48A-4EA1-B6B3-B8CA76A6B62B";
 
-      // 1. Buscar en todo tu OneDrive (incluye subcarpetas y accesos directos)
-      const searchUrl = GRAPH_ROOT + "/me/drive/root/search(q='" + encodeURIComponent(FILE_QUERY) + "')";
-      const resSearch = await fetch(searchUrl, { headers });
-      const searchData = await resSearch.json();
-
-      let archivo = searchData.value && searchData.value.find(f => f.name === FILE_QUERY);
-
-      // 2. Si no está en tu OneDrive, buscar en "Compartido conmigo"
-      if (!archivo) {
-        const sharedUrl = GRAPH_ROOT + "/me/drive/sharedWithMe?allowExternal=true";
-        const resShared = await fetch(sharedUrl, { headers });
-        const sharedData = await resShared.json();
-        archivo = sharedData.value && sharedData.value.find(f => f.name === FILE_QUERY);
-      }
-
-      if (!archivo) {
-        status.innerText = "❌ No se encontró el archivo '" + FILE_QUERY + "'.";
-        return alert("No se encontró el archivo en tu OneDrive ni en Compartidos.");
-      }
-
-      // Si es un acceso directo o compartido, usa el driveId y el itemId reales del propietario
-      const driveId = archivo.remoteItem ? archivo.remoteItem.parentReference.driveId : archivo.parentReference.driveId;
-      const itemId = archivo.remoteItem ? archivo.remoteItem.id : archivo.id;
-
-      dynamicTableUrl = GRAPH_ROOT + "/drives/" + driveId + "/items/" + itemId + "/workbook/tables/" + TABLE_NAME;
-      status.innerText = "✓ Conectado a: " + archivo.name + " (" + TABLE_NAME + ")";
+      dynamicTableUrl = GRAPH_ROOT + "/users/" + OWNER_EMAIL + "/drive/items/" + FILE_ID + "/workbook/tables/" + TABLE_NAME;
+      status.innerText = "✓ Conectando directo a la planilla de " + OWNER_EMAIL + "...";
       
       await cargarDatos();
     }
+
 
     async function cargarDatos() {
       if (!dynamicTableUrl) return localizarYcargar();
