@@ -3,8 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <title>Editor Excel Web</title>
-  <!-- Carga local desde tu propio GitHub para evitar bloqueos de red -->
-  <script src="./msal-browser.min.js"></script>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; background: #f3f4f6; padding: 2rem; margin: 0; }
     .container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -43,7 +41,7 @@
       </div>
     </div>
   </div>
- 
+
   <script>
     const CLIENT_ID = "86f0d04f-5763-4740-a5ec-b6f6b5e36769";
     const TENANT_ID = "227a5d9b-61f3-4a95-9e6d-4f924605902e";
@@ -52,35 +50,85 @@
     // Ajusta el nombre del archivo (.xlsx) y el nombre de la Tabla si son distintos
     const EXCEL_PATH = "/me/drive/root:/base_datos.xlsx:/workbook/tables/Tabla1";
 
-    let msalInstance = null;
     let accessToken = "";
 
-    window.onload = function() {
-      if (typeof msal === "undefined") {
-        alert("No se encontró el archivo msal-browser.min.js en tu repositorio de GitHub.");
-        return;
-      }
-      msalInstance = new msal.PublicClientApplication({
-        auth: {
-          clientId: CLIENT_ID,
-          authority: `https://microsoftonline.com{TENANT_ID}`,
-          redirectUri: REDIRECT_URI
-        }
-      });
-    };
+    // Generadores criptográficos nativos para OAuth2 PKCE
+    function generarVerifier() {
+      const array = new Uint8Array(32);
+      window.crypto.getRandomValues(array);
+      return btoa(String.fromCharCode.apply(null, array)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    async function generarChallenge(verifier) {
+      const data = new TextEncoder().encode(verifier);
+      const digest = await window.crypto.subtle.digest('SHA-256', data);
+      return btoa(String.fromCharCode.apply(null, new Uint8Array(digest))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
 
     async function iniciarSesion() {
-      if (!msalInstance) return alert("La librería MSAL aún no está lista.");
-      try {
-        const loginResponse = await msalInstance.loginPopup({ scopes: ["User.Read", "Files.ReadWrite"] });
-        accessToken = loginResponse.accessToken;
-        document.getElementById("btnLogin").innerText = "Conectado: " + loginResponse.account.username;
-        document.getElementById("app").classList.remove("hidden");
-        cargarDatos();
-      } catch (error) {
-        alert("Error al iniciar sesión: " + error.message);
-      }
+      const verifier = generarVerifier();
+      sessionStorage.setItem("pkce_verifier", verifier);
+      const challenge = await generarChallenge(verifier);
+
+      const params = new URLSearchParams({
+        client_id: CLIENT_ID,
+        response_type: "code",
+        redirect_uri: REDIRECT_URI,
+        response_mode: "query",
+        scope: "User.Read Files.ReadWrite",
+        code_challenge: challenge,
+        code_challenge_method: "S256"
+      });
+
+      window.location.href = `https://microsoftonline.com{TENANT_ID}/oauth2/v2.0/authorize?${params.toString()}`;
     }
+
+    // Al volver del login de Microsoft, intercambia el código por el token
+    window.onload = async function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get("code");
+      const errorDesc = urlParams.get("error_description");
+
+      if (errorDesc) {
+        alert("Error de Microsoft: " + errorDesc);
+        return;
+      }
+
+      if (code) {
+        const verifier = sessionStorage.getItem("pkce_verifier");
+        window.history.replaceState({}, document.title, REDIRECT_URI); // Limpia la URL
+
+        const body = new URLSearchParams({
+          client_id: CLIENT_ID,
+          scope: "User.Read Files.ReadWrite",
+          code: code,
+          redirect_uri: REDIRECT_URI,
+          grant_type: "authorization_code",
+          code_verifier: verifier
+        });
+
+        try {
+          const res = await fetch(`https://microsoftonline.com{TENANT_ID}/oauth2/v2.0/token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: body.toString()
+          });
+          const data = await res.json();
+
+          if (data.access_token) {
+            accessToken = data.access_token;
+            document.getElementById("btnLogin").innerText = "Sesión Activa ✓";
+            document.getElementById("btnLogin").disabled = true;
+            document.getElementById("app").classList.remove("hidden");
+            cargarDatos();
+          } else {
+            alert("No se pudo obtener token: " + (data.error_description || JSON.stringify(data)));
+          }
+        } catch (err) {
+          alert("Error de red al validar sesión: " + err.message);
+        }
+      }
+    };
 
     async function cargarDatos() {
       const headers = { Authorization: `Bearer ${accessToken}` };
