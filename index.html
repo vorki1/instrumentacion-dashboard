@@ -3,26 +3,41 @@
 <head>
   <meta charset="UTF-8">
   <title>Editor Excel Web</title>
-  <script src="https://msauth.net"></script>
-  <script src="https://tailwindcss.com"></script>
+  <!-- Carga local desde tu propio GitHub para evitar bloqueos de red -->
+  <script src="./msal-browser.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f3f4f6; padding: 2rem; margin: 0; }
+    .container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem; }
+    h1 { margin: 0; font-size: 1.5rem; color: #1f2937; }
+    button { cursor: pointer; border: none; border-radius: 6px; padding: 0.5rem 1rem; font-weight: 500; transition: background 0.2s; }
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-secondary { background: #e5e7eb; color: #374151; margin-bottom: 1rem; }
+    .btn-secondary:hover { background: #d1d5db; }
+    .btn-save { background: #16a34a; color: white; padding: 0.35rem 0.75rem; font-size: 0.875rem; }
+    .btn-save:hover { background: #15803d; }
+    .hidden { display: none; }
+    .table-wrapper { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+    th, td { border: 1px solid #d1d5db; padding: 0.5rem; text-align: left; }
+    th { background: #f9fafb; color: #374151; font-weight: 600; }
+    input[type="text"] { width: 100%; box-sizing: border-box; padding: 0.35rem; border: 1px solid #d1d5db; border-radius: 4px; }
+  </style>
 </head>
-<body class="bg-gray-100 p-8 font-sans">
+<body>
 
-  <div class="max-w-4xl mx-auto bg-white p-6 rounded shadow">
-    <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold text-gray-800">Gestor de Datos Excel</h1>
-      <button id="btnLogin" onclick="iniciarSesion()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-        Iniciar Sesión Microsoft
-      </button>
+  <div class="container">
+    <div class="header">
+      <h1>Gestor de Datos Excel</h1>
+      <button id="btnLogin" class="btn-primary" onclick="iniciarSesion()">Iniciar Sesión Microsoft</button>
     </div>
 
     <div id="app" class="hidden">
-      <button onclick="cargarDatos()" class="mb-4 bg-gray-200 px-3 py-1 rounded text-sm hover:bg-gray-300">
-        ↻ Recargar Tabla
-      </button>
-      <div class="overflow-x-auto">
-        <table class="min-w-full border border-gray-300" id="tablaDatos">
-          <thead class="bg-gray-200" id="tablaHead"></thead>
+      <button class="btn-secondary" onclick="cargarDatos()">↻ Recargar Tabla</button>
+      <div class="table-wrapper">
+        <table id="tablaDatos">
+          <thead id="tablaHead"></thead>
           <tbody id="tablaBody"></tbody>
         </table>
       </div>
@@ -30,26 +45,32 @@
   </div>
 
   <script>
-    // ================= CONFIGURACIÓN (REEMPLAZA ESTOS 3 DATOS) =================
     const CLIENT_ID = "86f0d04f-5763-4740-a5ec-b6f6b5e36769";
     const TENANT_ID = "227a5d9b-61f3-4a95-9e6d-4f924605902e";
     const REDIRECT_URI = "https://github.io";
     
+    // Ajusta el nombre del archivo (.xlsx) y el nombre de la Tabla si son distintos
     const EXCEL_PATH = "/me/drive/root:/base_datos.xlsx:/workbook/tables/Tabla1";
-    // =========================================================================
 
-    const msalConfig = {
-      auth: {
-        clientId: CLIENT_ID,
-        authority: `https://microsoftonline.com{TENANT_ID}`,
-        redirectUri: REDIRECT_URI
-      }
-    };
-
-    const msalInstance = new msal.PublicClientApplication(msalConfig);
+    let msalInstance = null;
     let accessToken = "";
 
+    window.onload = function() {
+      if (typeof msal === "undefined") {
+        alert("No se encontró el archivo msal-browser.min.js en tu repositorio de GitHub.");
+        return;
+      }
+      msalInstance = new msal.PublicClientApplication({
+        auth: {
+          clientId: CLIENT_ID,
+          authority: `https://microsoftonline.com{TENANT_ID}`,
+          redirectUri: REDIRECT_URI
+        }
+      });
+    };
+
     async function iniciarSesion() {
+      if (!msalInstance) return alert("La librería MSAL aún no está lista.");
       try {
         const loginResponse = await msalInstance.loginPopup({ scopes: ["User.Read", "Files.ReadWrite"] });
         accessToken = loginResponse.accessToken;
@@ -57,32 +78,33 @@
         document.getElementById("app").classList.remove("hidden");
         cargarDatos();
       } catch (error) {
-        alert("Error al iniciar sesión: " + error);
+        alert("Error al iniciar sesión: " + error.message);
       }
     }
 
     async function cargarDatos() {
       const headers = { Authorization: `Bearer ${accessToken}` };
       
-      // 1. Obtener encabezados
       const resCols = await fetch(`https://microsoft.com{EXCEL_PATH}/columns`, { headers });
+      if (!resCols.ok) {
+        const err = await resCols.json();
+        return alert("Error al leer Excel: " + (err.error?.message || resCols.statusText));
+      }
       const colsData = await resCols.json();
-      const thead = document.getElementById("tablaHead");
-      thead.innerHTML = "<tr>" + colsData.value.map(c => `<th class="border p-2 text-left">${c.name}</th>`).join("") + "<th class='border p-2'>Acción</th></tr>";
+      document.getElementById("tablaHead").innerHTML = "<tr>" + colsData.value.map(c => `<th>${c.name}</th>`).join("") + "<th>Acción</th></tr>";
 
-      // 2. Obtener filas
       const resRows = await fetch(`https://microsoft.com{EXCEL_PATH}/rows`, { headers });
       const rowsData = await resRows.json();
       const tbody = document.getElementById("tablaBody");
       tbody.innerHTML = "";
 
       rowsData.value.forEach((row, rowIndex) => {
-        const valores = row.values[0];
-        let tr = `<tr class="border-b">`;
+        const valores = row.values;
+        let tr = `<tr>`;
         valores.forEach((val, colIndex) => {
-          tr += `<td class="border p-2"><input type="text" id="celda-${rowIndex}-${colIndex}" value="${val}" class="w-full border rounded px-1"></td>`;
+          tr += `<td><input type="text" id="celda-${rowIndex}-${colIndex}" value="${val}"></td>`;
         });
-        tr += `<td class="border p-2"><button onclick="guardarFila(${rowIndex}, ${valores.length})" class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">Guardar</button></td></tr>`;
+        tr += `<td><button class="btn-save" onclick="guardarFila(${rowIndex}, ${valores.length})">Guardar</button></td></tr>`;
         tbody.innerHTML += tr;
       });
     }
@@ -105,7 +127,7 @@
       if (res.ok) {
         alert("Fila actualizada en Excel correctamente.");
       } else {
-        alert("Error al guardar. Verifica permisos.");
+        alert("Error al guardar. Verifica permisos de escritura en el archivo.");
       }
     }
   </script>
