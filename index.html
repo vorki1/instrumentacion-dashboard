@@ -45,14 +45,18 @@
   <script>
     const CLIENT_ID = "86f0d04f-5763-4740-a5ec-b6f6b5e36769";
     const TENANT_ID = "227a5d9b-61f3-4a95-9e6d-4f924605902e";
-    const REDIRECT_URI = "https://github.io";
+    
+    // Toma automáticamente la URL exacta desde donde abres la página
+    const REDIRECT_URI = window.location.origin + window.location.pathname;
     
     // Ajusta el nombre del archivo (.xlsx) y el nombre de la Tabla si son distintos
     const EXCEL_PATH = "/me/drive/root:/base_datos.xlsx:/workbook/tables/Tabla1";
 
-    const AUTH_URL = "https://microsoftonline.com" + TENANT_ID + "/oauth2/v2.0/authorize";
-    const TOKEN_URL = "https://microsoftonline.com" + TENANT_ID + "/oauth2/v2.0/token";
-    const GRAPH_BASE = "https://microsoft.com" + EXCEL_PATH;
+    // Dominios ensamblados para evitar recortes al copiar/pegar
+    const LOGIN_HOST = ["https:/", "://microsoftonline.com", TENANT_ID, "oauth2", "v2.0"].join("/");
+    const AUTH_URL = LOGIN_HOST + "/authorize";
+    const TOKEN_URL = LOGIN_HOST + "/token";
+    const GRAPH_BASE = ["https:/", "://microsoft.com", "v1.0"].join("/") + EXCEL_PATH;
 
     let accessToken = "";
 
