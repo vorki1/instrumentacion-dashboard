@@ -16,6 +16,7 @@
     .btn-save { background: #16a34a; color: white; padding: 0.35rem 0.75rem; font-size: 0.875rem; }
     .btn-save:hover { background: #15803d; }
     .hidden { display: none; }
+    .status { font-size: 0.9rem; color: #4b5563; margin-bottom: 1rem; }
     .table-wrapper { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
     th, td { border: 1px solid #d1d5db; padding: 0.5rem; text-align: left; }
@@ -32,6 +33,7 @@
     </div>
 
     <div id="app" class="hidden">
+      <div class="status" id="statusMsg">Buscando archivo en OneDrive...</div>
       <button class="btn-secondary" onclick="cargarDatos()">↻ Recargar Tabla</button>
       <div class="table-wrapper">
         <table id="tablaDatos">
@@ -47,24 +49,19 @@
     const TENANT_ID = "227a5d9b-61f3-4a95-9e6d-4f924605902e";
     const REDIRECT_URI = window.location.origin + window.location.pathname;
     
-    const SP_HOST = "moc.tnioperaHs.ym-airenimpac".split("").reverse().join("");
-    const SHARE_URL = "https://" + SP_HOST + "/:x:/r/personal/gfreire_cmp_cl/_layouts/15/doc2.aspx?sourcedoc=%7B73C432CA-D48A-4EA1-B6B3-B8CA76A6B62B%7D&file=Planilla%20Estructura%20equipos%20para%20instrumentos%20CNN%20Rev0.xlsx";
-    const ENCODED_URL = "u!" + btoa(SHARE_URL).replace(/=/g, "").replace(/\//g, "_").replace(/\+/g, "-");
-    
+    const FILE_QUERY = "Planilla Estructura equipos para instrumentos CNN Rev0.xlsx";
     const TABLE_NAME = "TablaDatos";
-    const EXCEL_PATH = "/me/drive/root:/Planilla Estructura equipos para instrumentos CNN Rev0.xlsx:/workbook/tables/" + TABLE_NAME;
 
-
-    // Dominios invertidos para evitar recortes o alteraciones al copiar/pegar
     const M_ONLINE = "moc.enilnotfosorcim.nigol".split("").reverse().join("");
     const M_GRAPH = "moc.tfosorcim.hparg".split("").reverse().join("");
 
     const LOGIN_HOST = ["https:/", M_ONLINE, TENANT_ID, "oauth2", "v2.0"].join("/");
     const AUTH_URL = LOGIN_HOST + "/authorize";
     const TOKEN_URL = LOGIN_HOST + "/token";
-    const GRAPH_BASE = ["https:/", M_GRAPH, "v1.0"].join("/") + EXCEL_PATH;
+    const GRAPH_ROOT = ["https:/", M_GRAPH, "v1.0"].join("/");
 
     let accessToken = "";
+    let dynamicTableUrl = "";
 
     function generarVerifier() {
       const array = new Uint8Array(32);
@@ -132,7 +129,7 @@
             document.getElementById("btnLogin").innerText = "Sesión Activa ✓";
             document.getElementById("btnLogin").disabled = true;
             document.getElementById("app").classList.remove("hidden");
-            cargarDatos();
+            await localizarYcargar();
           } else {
             alert("No se pudo obtener token: " + (data.error_description || JSON.stringify(data)));
           }
@@ -142,27 +139,62 @@
       }
     };
 
+    async function localizarYcargar() {
+      const headers = { Authorization: "Bearer " + accessToken };
+      const status = document.getElementById("statusMsg");
+
+      // 1. Buscar en todo tu OneDrive (incluye subcarpetas y accesos directos)
+      const searchUrl = GRAPH_ROOT + "/me/drive/root/search(q='" + encodeURIComponent(FILE_QUERY) + "')";
+      const resSearch = await fetch(searchUrl, { headers });
+      const searchData = await resSearch.json();
+
+      let archivo = searchData.value && searchData.value.find(f => f.name === FILE_QUERY);
+
+      // 2. Si no está en tu OneDrive, buscar en "Compartido conmigo"
+      if (!archivo) {
+        const sharedUrl = GRAPH_ROOT + "/me/drive/sharedWithMe?allowExternal=true";
+        const resShared = await fetch(sharedUrl, { headers });
+        const sharedData = await resShared.json();
+        archivo = sharedData.value && sharedData.value.find(f => f.name === FILE_QUERY);
+      }
+
+      if (!archivo) {
+        status.innerText = "❌ No se encontró el archivo '" + FILE_QUERY + "'.";
+        return alert("No se encontró el archivo en tu OneDrive ni en Compartidos.");
+      }
+
+      // Si es un acceso directo o compartido, usa el driveId y el itemId reales del propietario
+      const driveId = archivo.remoteItem ? archivo.remoteItem.parentReference.driveId : archivo.parentReference.driveId;
+      const itemId = archivo.remoteItem ? archivo.remoteItem.id : archivo.id;
+
+      dynamicTableUrl = GRAPH_ROOT + "/drives/" + driveId + "/items/" + itemId + "/workbook/tables/" + TABLE_NAME;
+      status.innerText = "✓ Conectado a: " + archivo.name + " (" + TABLE_NAME + ")";
+      
+      await cargarDatos();
+    }
+
     async function cargarDatos() {
+      if (!dynamicTableUrl) return localizarYcargar();
       const headers = { Authorization: "Bearer " + accessToken };
       
-      const resCols = await fetch(GRAPH_BASE + "/columns", { headers });
+      const resCols = await fetch(dynamicTableUrl + "/columns", { headers });
       if (!resCols.ok) {
         const err = await resCols.json();
-        return alert("Error al leer Excel: " + (err.error?.message || resCols.statusText));
+        return alert("Error al leer tabla: " + (err.error?.message || resCols.statusText));
       }
       const colsData = await resCols.json();
       document.getElementById("tablaHead").innerHTML = "<tr>" + colsData.value.map(c => "<th>" + c.name + "</th>").join("") + "<th>Acción</th></tr>";
 
-      const resRows = await fetch(GRAPH_BASE + "/rows", { headers });
+      const resRows = await fetch(dynamicTableUrl + "/rows", { headers });
       const rowsData = await resRows.json();
       const tbody = document.getElementById("tablaBody");
       tbody.innerHTML = "";
 
       rowsData.value.forEach((row, rowIndex) => {
-        const valores = row.values;
+        const valores = row.values[0];
         let tr = "<tr>";
         valores.forEach((val, colIndex) => {
-          tr += "<td><input type='text' id='celda-" + rowIndex + "-" + colIndex + "' value='" + val + "'></td>";
+          tr += "<td><input type='text' id='celda-" + rowIndex + "-" + colIndex + "' value='" + (val ?? "") + "'></td>";
         });
         tr += "<td><button class='btn-save' onclick='guardarFila(" + rowIndex + ", " + valores.length + ")'>Guardar</button></td></tr>";
         tbody.innerHTML += tr;
@@ -175,7 +207,7 @@
         nuevosValores.push(document.getElementById("celda-" + rowIndex + "-" + i).value);
       }
 
-      const res = await fetch(GRAPH_BASE + "/rows/itemAt(index=" + rowIndex + ")", {
+      const res = await fetch(dynamicTableUrl + "/rows/itemAt(index=" + rowIndex + ")", {
         method: "PATCH",
         headers: {
           Authorization: "Bearer " + accessToken,
@@ -187,7 +219,8 @@
       if (res.ok) {
         alert("Fila actualizada en Excel correctamente.");
       } else {
-        alert("Error al guardar. Verifica permisos de escritura en el archivo.");
+        const err = await res.json();
+        alert("Error al guardar: " + (err.error?.message || "Verifica permisos de escritura."));
       }
     }
   </script>
