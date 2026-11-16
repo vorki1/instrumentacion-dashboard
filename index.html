@@ -50,9 +50,12 @@
     // Ajusta el nombre del archivo (.xlsx) y el nombre de la Tabla si son distintos
     const EXCEL_PATH = "/me/drive/root:/base_datos.xlsx:/workbook/tables/Tabla1";
 
+    const AUTH_URL = "https://microsoftonline.com" + TENANT_ID + "/oauth2/v2.0/authorize";
+    const TOKEN_URL = "https://microsoftonline.com" + TENANT_ID + "/oauth2/v2.0/token";
+    const GRAPH_BASE = "https://microsoft.com" + EXCEL_PATH;
+
     let accessToken = "";
 
-    // Generadores criptográficos nativos para OAuth2 PKCE
     function generarVerifier() {
       const array = new Uint8Array(32);
       window.crypto.getRandomValues(array);
@@ -80,10 +83,9 @@
         code_challenge_method: "S256"
       });
 
-      window.location.href = `https://microsoftonline.com{TENANT_ID}/oauth2/v2.0/authorize?${params.toString()}`;
+      window.location.href = AUTH_URL + "?" + params.toString();
     }
 
-    // Al volver del login de Microsoft, intercambia el código por el token
     window.onload = async function() {
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get("code");
@@ -96,7 +98,7 @@
 
       if (code) {
         const verifier = sessionStorage.getItem("pkce_verifier");
-        window.history.replaceState({}, document.title, REDIRECT_URI); // Limpia la URL
+        window.history.replaceState({}, document.title, REDIRECT_URI);
 
         const body = new URLSearchParams({
           client_id: CLIENT_ID,
@@ -108,7 +110,7 @@
         });
 
         try {
-          const res = await fetch(`https://microsoftonline.com{TENANT_ID}/oauth2/v2.0/token`, {
+          const res = await fetch(TOKEN_URL, {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: body.toString()
@@ -131,28 +133,28 @@
     };
 
     async function cargarDatos() {
-      const headers = { Authorization: `Bearer ${accessToken}` };
+      const headers = { Authorization: "Bearer " + accessToken };
       
-      const resCols = await fetch(`https://microsoft.com{EXCEL_PATH}/columns`, { headers });
+      const resCols = await fetch(GRAPH_BASE + "/columns", { headers });
       if (!resCols.ok) {
         const err = await resCols.json();
         return alert("Error al leer Excel: " + (err.error?.message || resCols.statusText));
       }
       const colsData = await resCols.json();
-      document.getElementById("tablaHead").innerHTML = "<tr>" + colsData.value.map(c => `<th>${c.name}</th>`).join("") + "<th>Acción</th></tr>";
+      document.getElementById("tablaHead").innerHTML = "<tr>" + colsData.value.map(c => "<th>" + c.name + "</th>").join("") + "<th>Acción</th></tr>";
 
-      const resRows = await fetch(`https://microsoft.com{EXCEL_PATH}/rows`, { headers });
+      const resRows = await fetch(GRAPH_BASE + "/rows", { headers });
       const rowsData = await resRows.json();
       const tbody = document.getElementById("tablaBody");
       tbody.innerHTML = "";
 
       rowsData.value.forEach((row, rowIndex) => {
         const valores = row.values;
-        let tr = `<tr>`;
+        let tr = "<tr>";
         valores.forEach((val, colIndex) => {
-          tr += `<td><input type="text" id="celda-${rowIndex}-${colIndex}" value="${val}"></td>`;
+          tr += "<td><input type='text' id='celda-" + rowIndex + "-" + colIndex + "' value='" + val + "'></td>";
         });
-        tr += `<td><button class="btn-save" onclick="guardarFila(${rowIndex}, ${valores.length})">Guardar</button></td></tr>`;
+        tr += "<td><button class='btn-save' onclick='guardarFila(" + rowIndex + ", " + valores.length + ")'>Guardar</button></td></tr>";
         tbody.innerHTML += tr;
       });
     }
@@ -160,13 +162,13 @@
     async function guardarFila(rowIndex, numCols) {
       let nuevosValores = [];
       for (let i = 0; i < numCols; i++) {
-        nuevosValores.push(document.getElementById(`celda-${rowIndex}-${i}`).value);
+        nuevosValores.push(document.getElementById("celda-" + rowIndex + "-" + i).value);
       }
 
-      const res = await fetch(`https://microsoft.com{EXCEL_PATH}/rows/itemAt(index=${rowIndex})`, {
+      const res = await fetch(GRAPH_BASE + "/rows/itemAt(index=" + rowIndex + ")", {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: "Bearer " + accessToken,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ values: [nuevosValores] })
